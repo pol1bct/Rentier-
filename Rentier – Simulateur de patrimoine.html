@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rentier"><meta name="theme-color" content="#0b1210">
+<title>Rentier – Simulateur de patrimoine</title>
+<style>
+:root{--bg:#0b1210;--c:#131c19;--c2:#1c2a25;--t:#e8f0ec;--m:#8aa096;--g:#34d399;--r:#f87171;--y:#fbbf24;--b:#223530}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--t);font:15px/1.4 "Avenir Next",-apple-system,system-ui,sans-serif}
+#hd{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:rgba(11,18,16,.93);backdrop-filter:blur(10px);border-bottom:1px solid var(--b)}
+#hd b{font:700 20px Georgia,serif;color:var(--g);margin-right:10px}
+.mu{color:var(--m);font-size:13px}
+.pill{background:var(--c2);padding:4px 10px;border-radius:99px;font-size:12px;color:var(--m)}
+#main{padding:12px 14px 170px;max-width:640px;margin:auto}
+.card{background:var(--c);border:1px solid var(--b);border-radius:16px;padding:14px;margin-bottom:12px;animation:in .3s}
+@keyframes in{from{opacity:0;transform:translateY(6px)}}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.k{background:var(--c);border:1px solid var(--b);border-radius:14px;padding:12px}
+.k b{display:block;font-size:19px;margin-top:2px}
+.g{color:var(--g)}.r{color:var(--r)}.y{color:var(--y)}
+h3{margin:0 0 8px;font-size:15px}
+.row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--b);font-size:14px}
+.row:last-child{border:0}
+button{font:inherit;border:0;border-radius:12px;padding:10px 14px;background:var(--c2);color:var(--t)}
+button:active{transform:scale(.97)}
+.p{background:var(--g);color:#052016;font-weight:700}
+.d{background:#3a1d1d;color:var(--r)}
+.seg{display:flex;background:var(--c);border-radius:12px;padding:3px;margin-bottom:12px;overflow-x:auto}
+.seg button{flex:1;background:none;padding:8px 6px;font-size:13px;color:var(--m);white-space:nowrap}
+.seg .on{background:var(--c2);color:var(--t)}
+#nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:rgba(15,24,21,.97);border-top:1px solid var(--b);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+#nav button{flex:1;background:none;border-radius:0;padding:9px 0 7px;font-size:11px;color:var(--m)}
+#nav .on{color:var(--g)}
+#nav i{display:block;font-style:normal;font-size:20px}
+#go{position:fixed;left:14px;right:14px;bottom:calc(64px + env(safe-area-inset-bottom));z-index:6;padding:14px;font-size:16px;box-shadow:0 6px 24px #000a}
+#mb{position:fixed;inset:0;background:#000a;display:none;align-items:flex-end;z-index:20}
+#mb.on{display:flex}
+.sheet{background:var(--c);width:100%;max-height:88vh;overflow:auto;border-radius:22px 22px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom));animation:up .25s}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+input[type=number]{width:100%;font-size:18px;padding:10px;border-radius:10px;border:1px solid var(--b);background:var(--bg);color:var(--t)}
+input[type=range]{width:100%;accent-color:#34d399}
+.bar{height:8px;background:var(--c2);border-radius:9px;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:var(--g);transition:width .5s}
+.tag{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--c2);color:var(--m)}
+#tt{position:fixed;top:calc(64px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:var(--g);color:#052016;padding:10px 16px;border-radius:12px;z-index:30;font-weight:600;display:none;max-width:90%;text-align:center}
+</style></head><body>
+<div id="hd"></div><div id="main"></div>
+<button id="go" class="p" onclick="endMonth()">Terminer le mois</button>
+<div id="nav"></div><div id="tt"></div>
+<div id="mb" onclick="if(event.target===this)closeM()"><div id="md" style="width:100%"></div></div>
+<script>
+const $=s=>document.querySelector(s),E=n=>(Math.round(n)+0).toLocaleString('fr-FR')+' €',E2=n=>n.toFixed(2).replace('.',',')+' €',P=n=>(n*100).toFixed(1).replace('.',',')+' %';
+const R=(a,b)=>a+Math.random()*(b-a),ri=(a,b)=>Math.floor(R(a,b+1)),cl=(x,a,b)=>Math.min(b,Math.max(a,x)),r2=x=>Math.round(x*100)/100;
+const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*v)};
+const pmt=(p,r,n)=>r?p*r/12/(1-Math.pow(1+r/12,-n)):p/n;
+const KEY='rentier_v1',QU=['Centre-ville','Quartier de la gare','Quartier des Arts','Les Hauts','Bords de rivière','Faubourg Neuf'];
+const JOBS=[{n:'Employé administratif'},{n:'Technicien supérieur'},{n:'Cadre'},{n:'Responsable de service'},{n:'Directeur'}];
+const TIPS=['Cash-flow : ce qui reste chaque mois après toutes les dépenses. Un actif met de l’argent dans votre poche, un passif en retire.','Effet de levier : un crédit amplifie les gains… et les pertes.','Diversification : les ETF répartissent le risque sur de nombreuses entreprises.','Quand les taux montent, la valeur des obligations existantes baisse.','L’inflation rogne le pouvoir d’achat du cash qui dort.','Le rendement net tient compte des charges, de la taxe foncière et de la vacance, pas seulement du loyer.','Un fonds d’urgence de 3 à 6 mois de dépenses protège des coups durs.','Les banques refusent en général un endettement supérieur à 35 % des revenus.'];
+const MK=[
+{id:'AER',n:'Aérotek',s:'Industrie',p:84,v:.055,mu:.08,dv:.02,b:1.2,t:'a',k:'Modéré'},
+{id:'NVL',n:'Novalis Santé',s:'Santé',p:132,v:.04,mu:.07,dv:.015,b:.7,t:'a',k:'Modéré'},
+{id:'BYT',n:'Bytewave',s:'Technologie',p:210,v:.08,mu:.11,dv:0,b:1.5,t:'a',k:'Élevé'},
+{id:'ENV',n:'Enverda',s:'Énergie',p:47,v:.06,mu:.06,dv:.045,b:.9,t:'a',k:'Élevé'},
+{id:'LUX',n:'Luxeor',s:'Consommation',p:96,v:.045,mu:.07,dv:.025,b:1,t:'a',k:'Modéré'},
+{id:'FNB',n:'Finabank',s:'Banque',p:38,v:.055,mu:.06,dv:.05,b:1.3,t:'a',k:'Élevé'},
+{id:'MWD',n:'ETF Monde Diversifié',s:'ETF mondial',p:100,v:.02,mu:.07,dv:.015,b:1,t:'e',k:'Modéré'},
+{id:'EUR',n:'ETF Europe Dividendes',s:'ETF européen',p:75,v:.025,mu:.06,dv:.035,b:.9,t:'e',k:'Modéré'},
+{id:'OAT',n:'Obligation d’État 10 ans',s:'Obligation',p:100,v:.01,mu:0,dv:.035,b:0,t:'o',k:'Faible',dur:8},
+{id:'COR',n:'Obligation Entreprise',s:'Obligation',p:100,v:.02,mu:0,dv:.055,b:0,t:'o',k:'Modéré',dur:5}];
+let S,U={tab:'home',sub:{}};
+function nw(){return r2(S.cash+S.props.reduce((a,p)=>a+p.val,0)+holdVal()+S.biz*.85-S.loans.reduce((a,l)=>a+l.P,0))}
+function holdVal(){return S.stk.reduce((a,s)=>a+(S.hold[s.id]?S.hold[s.id].q*s.p:0),0)}
+function addLoan(name,P,r,n,pid){S.loans.push({id:S.nid++,name,P,r,n,pay:r2(pmt(P,r,n)),pid})}
+function genL(){const T=[['Studio',18,32,1.12,.05,.08],['Appartement',40,75,1,.045,.075],['Maison',80,130,.85,.04,.065],['Immeuble',200,380,.72,.065,.095]],t=T[ri(0,3)],m2=ri(t[1],t[2]),price=Math.round(m2*3200*S.eco.idx*t[3]*R(.85,1.15)/500)*500,rent=Math.round(price*R(t[4],t[5])/12/5)*5;
+return{id:S.nid++,t:t[0],q:QU[ri(0,5)],m2,price,rent,chg:Math.round(rent*R(.09,.17)),tax:Math.round(price*R(.008,.014)),vp:R(.03,.11)}}
+function fresh(){S={v:1,m:0,cash:3000,job:0,sal:2200,skill:0,unemp:0,pm:-9,biz:0,nid:1,exp:{'Logement (loyer)':750,'Alimentation':350,'Transport':120,'Loisirs et abonnements':180,'Assurances et santé':90},loans:[],props:[],hold:{},mkt:[],nw:[],log:[],ach:{},ev:'',last:null,eco:{ph:0,infl:.02,rate:.03,gdp:.015,idx:1,ih:[1],rh:[.03]},
+stk:MK.map(x=>{const a=[1];for(let i=0;i<11;i++)a.push(a[i]*(1+x.mu/12+x.v*gauss()*(x.t=='o'?.3:1)));return{...x,hist:a.map(y=>y/a[11]*x.p)}})};
+addLoan('Crédit auto',4800,.055,36);for(let i=0;i<8;i++)S.mkt.push(genL());S.nw.push(nw())}
+function cf(){const sal=S.unemp?S.sal*.6:S.sal,rents=S.props.reduce((a,p)=>a+(p.vac>0?0:p.rent),0),ch=S.props.reduce((a,p)=>a+p.chg+p.tax/12,0),
+div=S.stk.reduce((a,s)=>a+(S.hold[s.id]?S.hold[s.id].q*s.p*s.dv/12*.7:0),0),sav=Math.min(Math.max(S.cash,0),22950)*S.eco.rate*.5/12,biz=S.biz*.0045,
+exp=Object.values(S.exp).reduce((a,b)=>a+b,0),lp=S.loans.reduce((a,l)=>a+l.pay,0),passive=rents+div+sav+biz;
+return{sal,rents,div,sav,biz,passive,ch,exp,lp,gross:sal+rents+div+biz,net:sal+passive-ch-exp-lp}}
+const immo=f=>{S.eco.idx*=f;S.props.forEach(p=>p.val*=f);S.mkt.forEach(l=>l.price*=f)};
+const mv=(a,e)=>S.stk.forEach(s=>{if(s.t=='a')s.p*=a;else if(s.t=='e')s.p*=e});
+const EV=[
+['Perte d’emploi',()=>S.sal>0&&!S.unemp&&S.m>3&&Math.random()<.5,a=>{S.unemp=ri(2,4);return`Licenciement : allocation chômage à 60 % pendant ${S.unemp} mois.`}],
+['Panne de voiture',()=>1,a=>{const c=ri(400,1600);a('Réparation voiture',-c);return`Panne de voiture : ${E(c)} de réparation.`}],
+['Travaux imprévus',()=>S.props.length,a=>{const p=S.props[ri(0,S.props.length-1)],c=Math.round(p.val*R(.01,.04));a('Travaux — '+p.type,-c);return`Travaux imprévus sur « ${p.name} » : ${E(c)}.`}],
+['Augmentation',()=>S.sal>0&&!S.unemp,a=>{S.sal=Math.round(S.sal*1.04);return'Augmentation de 4 % de votre salaire.'}],
+['Hausse des taux',()=>S.eco.rate<.07,a=>{S.eco.rate+=.01;immo(.98);return'La banque centrale relève ses taux d’un point : crédits plus chers, immobilier sous pression.'}],
+['Baisse des taux',()=>S.eco.rate>.02,a=>{S.eco.rate-=.008;immo(1.015);return'Baisse des taux de 0,8 point : emprunter coûte moins cher.'}],
+['Krach boursier',()=>1,a=>{mv(.84,.9);S.eco.ph=1;return'Krach : les actions perdent environ 15 %. Les obligations d’État résistent mieux.'}],
+['Euphorie boursière',()=>!S.eco.ph,a=>{mv(1.08,1.05);return'Euphorie sur les marchés : les actions gagnent environ 8 %.'}],
+['Baisse de l’immobilier',()=>1,a=>{immo(.94);return'Le marché immobilier recule de 6 % : vos biens valent moins, les prix d’achat aussi.'}],
+['Hausse des loyers',()=>S.props.length,a=>{S.props.forEach(p=>p.rent=Math.round(p.rent*1.03));return'Tension locative : vos loyers augmentent de 3 %.'}],
+['Prime exceptionnelle',()=>S.sal>0&&!S.unemp,a=>{const c=S.sal*.5;a('Prime',c);return`Prime exceptionnelle de ${E(c)}.`}],
+['Frais de santé',()=>1,a=>{const c=ri(250,900);a('Frais de santé',-c);return`Frais de santé imprévus : ${E(c)}.`}],
+['Remboursement d’impôt',()=>1,a=>{const c=ri(200,700);a('Remboursement d’impôt',c);return`Remboursement d’impôt de ${E(c)}.`}],
+['Locataire défaillant',()=>S.props.length,a=>{const p=S.props[ri(0,S.props.length-1)];p.vac=ri(2,4);return`Impayés : « ${p.name} » ne rapporte plus rien pendant ${p.vac} mois.`}],
+['Vente urgente',()=>1,a=>{const l=genL();l.price=Math.round(l.price*.82/500)*500;S.mkt.unshift(l);return`Opportunité : un vendeur pressé brade un ${l.t.toLowerCase()} (${E(l.price)}). À vous de vérifier la rentabilité.`}],
+['Pic d’inflation',()=>1,a=>{S.eco.infl=Math.min(.09,S.eco.infl+.015);return'L’inflation accélère : les prix montent, l’épargne perd de sa valeur.'}]];
+const AC=[['p1','Premier bien immobilier',()=>S.props.length>0],['rp','Premier revenu passif',()=>{const c=cf();return c.rents+c.div+c.biz>=1}],['lib','Liberté financière : revenus passifs ≥ dépenses',()=>{const c=cf();return c.passive>=c.exp}],['pf','Premier portefeuille de 100 000 €',()=>holdVal()>=1e5],['n1','100 000 € de patrimoine net',()=>nw()>=1e5],['n2','Premier million de patrimoine net',()=>nw()>=1e6],['bz','Première entreprise',()=>S.biz>0],['pr','Première promotion',()=>S.job>0],['p3','Propriétaire de 3 biens',()=>S.props.length>=3],['dl','Sans aucune dette',()=>!S.loans.length&&S.m>=6],['y5','5 ans de survie financière',()=>S.m>=60&&nw()>0]];
+function checkAch(){AC.forEach(a=>{if(!S.ach[a[0]]&&a[2]()){S.ach[a[0]]=S.m;toast('Succès : '+a[1]);log('Succès : '+a[1],0)}})}
+function log(d,a){S.log.push({m:S.m+1,d,a});if(S.log.length>400)S.log.shift()}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function toast(m){const t=$('#tt');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',2600)}
+function modal(h){$('#md').innerHTML='<div class="sheet">'+h+'</div>';$('#mb').classList.add('on')}
+function closeM(){$('#mb').classList.remove('on')}
+function done(m){save();checkAch();render();if(m)toast(m)}
+function endMonth(){
+const L=[],e=S.eco,old=e.rate;let net=0,yr='';const add=(d,a)=>{a=r2(a);if(a)L.push([d,a]);net+=a};
+e.ph=e.ph?(Math.random()<.09?0:1):(Math.random()<.02?1:0);
+e.infl=cl(e.infl+(.02-e.infl)*.05+.0012*gauss(),0,.09);
+e.rate=cl(e.rate+(e.infl+.01-e.rate)*.08+.0012*gauss()-(e.ph?.0004:0),.003,.09);
+e.gdp+=((e.ph?R(-.03,-.004):R(.004,.034))-e.gdp)*.25;
+immo(1+.002+(e.ph?-.005:.0015)-(e.rate-.03)*.05+.004*gauss());
+const mf=(e.ph?-.01:.005)+.03*gauss();
+S.stk.forEach(s=>{let r=s.t=='o'?-s.dur*(e.rate-old)+.004*gauss()-(s.id=='COR'&&Math.random()<.003?.2:0):s.mu/12+s.b*mf+s.v*.8*gauss();s.p=Math.max(1,s.p*(1+cl(r,-.4,.5)));s.hist.push(s.p);if(s.hist.length>120)s.hist.shift()});
+if(S.unemp>0){S.unemp--;add('Allocation chômage',S.sal*.6)}else add('Salaire — '+JOBS[S.job].n,S.sal);
+S.props.forEach(p=>{if(p.vac>0){p.vac--;p.vf=1}else if(Math.random()<p.vp){p.vac=ri(0,2);p.vf=1}else p.vf=0;if(!p.vf)add('Loyer — '+p.type,p.rent);add('Charges et taxe foncière — '+p.type,-(p.chg+p.tax/12));p.val*=1+.003*gauss()});
+S.stk.forEach(s=>{const h=S.hold[s.id];if(h&&s.dv)add('Dividendes nets — '+s.id,h.q*s.p*s.dv/12*.7)});
+add('Intérêts d’épargne',Math.min(Math.max(S.cash,0),22950)*e.rate*.5/12);
+if(S.biz>0){const pr=S.biz*(.006+(e.ph?-.012:0)+.025*gauss());if(pr>=0)add('Bénéfices de l’entreprise (nets)',pr*.75);else{S.biz=Math.max(0,S.biz+pr);L.push(['Perte de l’entreprise (sur le capital)',r2(pr)])}}
+add('Dépenses courantes',-Object.values(S.exp).reduce((a,b)=>a+b,0));
+S.loans.forEach(l=>{const i=l.P*l.r/12,pay=l.n<=1?l.P+i:Math.min(l.pay,l.P+i);l.P=Math.max(0,l.P-(pay-i));l.n--;add('Mensualité — '+l.name,-pay)});
+S.loans=S.loans.filter(l=>l.P>.5&&l.n>0);
+if((S.m+1)%12==0){const f=1+e.infl;for(const k in S.exp)S.exp[k]=Math.round(S.exp[k]*f);S.sal=Math.round(S.sal*(1+e.infl*R(.5,1.1)));S.props.forEach(p=>{p.rent=Math.round(p.rent*(1+e.infl*R(.7,1.2)));p.chg=Math.round(p.chg*f);p.tax=Math.round(p.tax*f)});yr='Indexation annuelle : dépenses, salaire, loyers et charges ajustés à l’inflation. '}
+let ev='';if(Math.random()<.4){const ok=EV.filter(x=>x[0]!=S.ev&&x[1]());if(ok.length){const x=ok[ri(0,ok.length-1)];ev=x[2](add);S.ev=x[0]}}
+S.stk.forEach(s=>s.hist[s.hist.length-1]=s.p);
+if(S.cash+net<0)add('Intérêts de découvert',(S.cash+net)*.012);
+S.cash=r2(S.cash+net);S.mkt.splice(0,2);S.mkt.push(genL(),genL());
+S.m++;e.ih.push(e.idx);e.rh.push(e.rate);if(e.ih.length>240){e.ih.shift();e.rh.shift()}S.nw.push(nw());if(S.nw.length>240)S.nw.shift();
+log('Bilan du mois',net);S.last={ev:yr+ev};save();checkAch();render();
+modal(`<h3>Bilan — fin du mois ${S.m}</h3>${yr+ev?`<div class="card" style="background:var(--c2)">${yr+ev}</div>`:''}${L.map(x=>`<div class="row"><span>${x[0]}</span><b class="${x[1]<0?'r':'g'}">${E(x[1])}</b></div>`).join('')}<div class="row"><b>Variation de trésorerie</b><b class="${net<0?'r':'g'}">${E(net)}</b></div>${S.cash<0?'<p class="r">Compte à découvert : vendez un actif ou réduisez vos dettes.</p>':''}<button class="p" style="width:100%;margin-top:12px" onclick="closeM()">Continuer</button>`)}
+/* immobilier */
+function qt(l,ap,n){const r=S.eco.rate+.012+(n-15)*.0006,loan=Math.max(0,l.price-ap),fees=Math.round(l.price*.075),pay=loan?pmt(loan,r,n*12):0;return{r,loan,fees,pay,int:pay*n*12-loan,need:ap+fees}}
+function buyUI(id){const l=S.mkt.find(x=>x.id==id);if(!l)return;l.price=Math.round(l.price/500)*500;U.b={id,ap:Math.round(l.price*.2/1000)*1000,n:20};
+modal(`<h3>${l.t} ${l.m2} m² — ${l.q}</h3><div class="mu">Prix ${E(l.price)} · loyer ${E(l.rent)}/mois · charges ${E(l.chg)}/mois · taxe foncière ${E(l.tax)}/an</div><p>Apport personnel : <b id="apv"></b> <button style="padding:4px 10px" onclick="U.b.ap=${l.price};document.querySelector('#rg').value=${l.price};bq()">Au comptant</button></p><input id="rg" type="range" min="0" max="${l.price}" step="1000" value="${U.b.ap}" oninput="U.b.ap=+this.value;bq()"><div id="bq"></div><button class="p" style="width:100%;margin-top:12px" onclick="buyDo()">Acheter</button>`);bq()}
+function bq(){const l=S.mkt.find(x=>x.id==U.b.id),b=U.b,q=qt(l,b.ap,b.n);$('#apv').textContent=E(b.ap);
+$('#bq').innerHTML=(q.loan?`<div class="seg">${[15,20,25].map(n=>`<button class="${b.n==n?'on':''}" onclick="U.b.n=${n};bq()">${n} ans</button>`).join('')}</div><div class="row"><span>Taux du crédit</span><b>${P(q.r)}</b></div><div class="row"><span>Mensualité</span><b>${E(q.pay)}</b></div><div class="row"><span>Intérêts totaux</span><b>${E(q.int)}</b></div><div class="row"><span>Coût total du financement</span><b>${E(q.loan+q.int)}</b></div>`:'<div class="mu" style="margin:8px 0">Achat au comptant : aucun crédit.</div>')+`<div class="row"><span>Frais de notaire (7,5 %)</span><b>${E(q.fees)}</b></div><div class="row"><span>Trésorerie à débourser</span><b class="${q.need>S.cash?'r':''}">${E(q.need)}</b></div>`}
+function buyDo(){const l=S.mkt.find(x=>x.id==U.b.id),b=U.b,q=qt(l,b.ap,b.n);if(q.need>S.cash)return toast('Trésorerie insuffisante');
+if(q.loan){const c=cf();if((c.lp+q.pay)/Math.max(c.sal+c.rents*.7+c.div,1)>.35)return toast('Crédit refusé : endettement supérieur à 35 %')}
+S.cash=r2(S.cash-q.need);S.props.push({id:l.id,name:l.t+' '+l.m2+' m² · '+l.q,type:l.t,price:l.price,fees:q.fees,val:l.price,rent:l.rent,chg:l.chg,tax:l.tax,vp:l.vp,vac:0,vf:0});
+if(q.loan)addLoan('Crédit immo — '+l.t,q.loan,q.r,b.n*12,l.id);S.mkt=S.mkt.filter(x=>x.id!=l.id);log('Achat immobilier — '+l.t,-q.need);closeM();done('Bien acheté')}
+function sellUI(id){const p=S.props.find(x=>x.id==id),ln=S.loans.find(x=>x.pid==id),f=p.val*.05,tx=Math.max(0,p.val-p.price)*.25,net=p.val-f-tx-(ln?ln.P:0);U.s=id;
+modal(`<h3>Vendre : ${p.name}</h3><div class="row"><span>Prix de vente estimé</span><b>${E(p.val)}</b></div><div class="row"><span>Frais d’agence (5 %)</span><b>${E(f)}</b></div><div class="row"><span>Impôt sur la plus-value (25 %)</span><b>${E(tx)}</b></div><div class="row"><span>Remboursement du crédit</span><b>${E(ln?ln.P:0)}</b></div><div class="row"><b>Net encaissé</b><b class="${net<0?'r':'g'}">${E(net)}</b></div><button class="p" style="width:100%;margin-top:12px" onclick="sellDo(${net})">Confirmer la vente</button>`)}
+function sellDo(net){const p=S.props.find(x=>x.id==U.s);if(S.cash+net<0)return toast('Vente impossible : le solde serait négatif');S.cash=r2(S.cash+net);S.loans=S.loans.filter(x=>x.pid!=p.id);S.props=S.props.filter(x=>x.id!=p.id);log('Vente — '+p.type,net);closeM();done('Bien vendu')}
+function payUI(id){const l=S.loans.find(x=>x.id==id);U.l=id;modal(`<h3>Rembourser : ${l.name}</h3><div class="mu">Capital restant ${E(l.P)} · trésorerie ${E(S.cash)}</div><p><input id="pa" type="number" inputmode="decimal" min="1" value="${Math.floor(Math.max(0,Math.min(l.P,S.cash)))}"></p><button class="p" style="width:100%" onclick="payDo()">Rembourser</button>`)}
+function payDo(){const l=S.loans.find(x=>x.id==U.l),a=+$('#pa').value;if(!(a>0))return toast('Montant invalide');if(a>S.cash)return toast('Trésorerie insuffisante');if(a>l.P+.01)return toast('Supérieur au capital restant');
+S.cash=r2(S.cash-a);l.P=r2(l.P-a);if(l.P<.5)S.loans=S.loans.filter(x=>x.id!=l.id);else l.pay=r2(pmt(l.P,l.r,l.n));log('Remboursement — '+l.name,-a);closeM();done('Remboursement effectué')}
+/* bourse */
+function tradeUI(id,sd){const s=S.stk.find(x=>x.id==id),h=S.hold[id]||{q:0};U.t={id,sd};modal(`<h3>${sd=='b'?'Acheter':'Vendre'} : ${s.n}</h3><div class="mu">Cours ${E2(s.p)} · en portefeuille : ${h.q}</div><p><input id="tq" type="number" inputmode="numeric" min="1" value="1" oninput="tq()"></p><div id="tqo"></div><button class="p" style="width:100%;margin-top:12px" onclick="tradeDo()">Confirmer</button>`);tq()}
+function tq(){const s=S.stk.find(x=>x.id==U.t.id),h=S.hold[s.id]||{q:0,c:0},q=Math.max(0,Math.floor(+$('#tq').value)||0),g=q*s.p,f=g*.003;let o=`<div class="row"><span>Montant</span><b>${E2(g)}</b></div><div class="row"><span>Frais (0,3 %)</span><b>${E2(f)}</b></div>`;
+if(U.t.sd=='b')o+=`<div class="row"><span>Total</span><b class="${g+f>S.cash?'r':''}">${E2(g+f)}</b></div>`;else{const gain=q&&h.q?g-f-h.c*Math.min(q,h.q)/h.q:0,tx=Math.max(0,gain)*.3;o+=`<div class="row"><span>Impôt sur la plus-value (30 %)</span><b>${E2(tx)}</b></div><div class="row"><span>Net encaissé</span><b>${E2(g-f-tx)}</b></div>`}$('#tqo').innerHTML=o}
+function tradeDo(){const s=S.stk.find(x=>x.id==U.t.id),q=Math.floor(+$('#tq').value),h=S.hold[s.id]||{q:0,c:0};if(!(q>=1))return toast('Quantité invalide');const g=q*s.p,f=g*.003;
+if(U.t.sd=='b'){if(g+f>S.cash)return toast('Trésorerie insuffisante');S.cash=r2(S.cash-g-f);S.hold[s.id]={q:h.q+q,c:h.c+g+f};log('Achat '+q+' × '+s.id,-(g+f))}
+else{if(q>h.q)return toast('Vous n’en détenez pas autant');const cb=h.c*q/h.q,tx=Math.max(0,g-f-cb)*.3;S.cash=r2(S.cash+g-f-tx);h.q-=q;h.c-=cb;if(h.q<=0)delete S.hold[s.id];else S.hold[s.id]=h;log('Vente '+q+' × '+s.id,g-f-tx)}closeM();done('Ordre exécuté')}
+/* carrière */
+function train(){if(S.skill>=12)return toast('Compétences au maximum');if(S.cash<1200)return toast('Il faut 1 200 €');S.cash-=1200;S.skill++;log('Formation',-1200);done('Compétence +1')}
+function promo(){if(S.job>=4)return toast('Vous êtes déjà au sommet');if(S.m-S.pm<6)return toast('Attendez '+(6-(S.m-S.pm))+' mois avant une nouvelle demande');if(S.unemp)return toast('Impossible pendant le chômage');
+S.pm=S.m;const p=cl(.1+.2*(S.skill-2*S.job),0,.85);if(Math.random()<p){S.job++;S.sal=Math.round(S.sal*1.2);S.exp['Logement (loyer)']+=100;log('Promotion : '+JOBS[S.job].n,0);done('Promotion obtenue ! Votre train de vie augmente un peu.')}else done('Promotion refusée. Développez vos compétences.')}
+function bizUI(m){U.z=m;modal(`<h3>${m=='in'?(S.biz?'Réinvestir dans l’entreprise':'Créer une entreprise'):'Retirer du capital'}</h3><div class="mu">${m=='in'?(S.biz?'':'Minimum 5 000 €. ')+'Rendement moyen faible, résultat très variable, risque de perte. Trésorerie : '+E(S.cash):'Capital : '+E(S.biz)+'. Liquidation à 85 % de la valeur.'}</div><p><input id="bz" type="number" inputmode="decimal" value="${m=='in'?Math.floor(Math.max(0,Math.min(S.cash,S.biz?1000:5000))):Math.floor(S.biz)}"></p><button class="p" style="width:100%" onclick="bizDo()">Confirmer</button>`)}
+function bizDo(){const a=+$('#bz').value;if(!(a>0))return toast('Montant invalide');if(U.z=='in'){if(a>S.cash)return toast('Trésorerie insuffisante');if(!S.biz&&a<5000)return toast('Minimum 5 000 €');S.cash=r2(S.cash-a);S.biz+=a;log('Investissement entreprise',-a)}else{if(a>S.biz+.01)return toast('Supérieur au capital');S.biz=Math.max(0,S.biz-a);S.cash=r2(S.cash+a*.85);log('Retrait entreprise',a*.85)}closeM();done('Entreprise mise à jour')}
+function resetUI(){modal(`<h3>Recommencer une partie ?</h3><p class="mu">Votre progression actuelle sera définitivement effacée.</p><button class="d" style="width:100%" onclick="resetDo()">Effacer et recommencer</button><button style="width:100%;margin-top:8px" onclick="closeM()">Annuler</button>`)}
+function resetDo(){try{localStorage.removeItem(KEY)}catch(e){}fresh();closeM();U={tab:'home',sub:{}};done('Nouvelle partie')}
+/* vues */
+function spark(a,h=60,c){if(a.length<2)return'<div class="mu" style="padding:14px 0">Le graphique se remplira au fil des mois.</div>';const mn=Math.min(...a),mx=Math.max(...a),d=mx-mn||1,pts=a.map((v,i)=>(i/(a.length-1)*300).toFixed(1)+','+(h-4-(v-mn)/d*(h-8)).toFixed(1)).join(' ');
+return`<svg viewBox="0 0 300 ${h}" width="100%" height="${h}" preserveAspectRatio="none"><polyline fill="none" stroke="${c||(a[a.length-1]>=a[0]?'#34d399':'#f87171')}" stroke-width="2" vector-effect="non-scaling-stroke" points="${pts}"/></svg>`}
+const K=(l,v,c)=>`<div class="k"><small class="mu">${l}</small><b class="${c||''}">${v}</b></div>`,Rw=(l,v,c)=>`<div class="row"><span>${l}</span><b class="${c||''}">${v}</b></div>`;
+const seg=(t,n)=>`<div class="seg">${n.map((x,i)=>`<button class="${(U.sub[t]||0)==i?'on':''}" onclick="U.sub['${t}']=${i};render()">${x}</button>`).join('')}</div>`;
+const stc=s=>{const h=S.hold[s.id],pv=s.hist.length>1?s.p/s.hist[s.hist.length-2]-1:0;return`<div class="card"><div class="row" style="border:0"><div><b>${s.n}</b><div class="mu">${s.s} · risque ${s.k} · ${s.dv?'rendement '+P(s.dv):'sans dividende'}</div></div><div style="text-align:right"><b>${E2(s.p)}</b><div class="${pv<0?'r':'g'}">${pv>=0?'+':''}${P(pv)}</div></div></div>${spark(s.hist)}<div style="display:flex;gap:8px;margin-top:8px"><button class="p" style="flex:1" onclick="tradeUI('${s.id}','b')">Acheter</button>${h?`<button style="flex:1" onclick="tradeUI('${s.id}','s')">Vendre (${h.q})</button>`:''}</div></div>`};
+const ny=l=>(l.rent*12*(1-l.vp*2)-l.chg*12-l.tax)/(l.price*1.075);
+const lc=l=>`<div class="card"><div class="row" style="border:0"><div><b>${l.t} ${l.m2} m²</b><div class="mu">${l.q}</div></div><b>${E(l.price)}</b></div>${Rw('Loyer potentiel',E(l.rent)+'/mois')}${Rw('Charges / taxe foncière',E(l.chg)+'/mois · '+E(l.tax)+'/an')}${Rw('Vacance locative estimée',P(l.vp)+' des mois')}${Rw('Rendement brut / net estimé',P(l.rent*12/l.price)+' / '+P(ny(l)),ny(l)<.03?'y':'g')}<button class="p" style="width:100%;margin-top:8px" onclick="buyUI(${l.id})">Acheter</button></div>`;
+const V={
+home(){const c=cf(),n=nw(),dr=c.lp/Math.max(c.gross,1),f=Math.min(1,c.passive/c.exp);return`<div class="grid">${K('Solde bancaire',E(S.cash),S.cash<0?'r':'')}${K('Patrimoine net',E(n),n<0?'r':'g')}${K('Revenus passifs',E(c.passive)+'/mois','g')}${K('Dépenses',E(c.exp+c.lp+c.ch)+'/mois')}${K('Cash-flow',(c.net>=0?'+':'')+E(c.net)+'/mois',c.net<0?'r':'g')}${K('Endettement',P(dr),dr>.35?'r':'')}</div>
+<div class="card"><h3>Évolution du patrimoine net</h3>${spark(S.nw,90)}</div>
+<div class="card"><h3>Objectif : liberté financière</h3><div class="mu">Vos revenus passifs couvrent ${P(f)} de vos dépenses courantes.</div><div class="bar"><i style="width:${f*100}%"></i></div></div>
+${S.last&&S.last.ev?`<div class="card"><h3>Dernier événement</h3><div class="mu">${S.last.ev}</div></div>`:''}<div class="card"><h3>À savoir</h3><div class="mu">${TIPS[S.m%TIPS.length]}</div></div>`},
+budget(){const sb=U.sub.budget||0,c=cf();let h=seg('budget',['Budget','Crédits','Historique']);
+if(sb==0){const A=S.props.reduce((a,p)=>a+p.val,0),D=S.loans.reduce((a,l)=>a+l.P,0);h+=`<div class="card"><h3>Revenus mensuels</h3>${Rw(S.unemp?'Allocation chômage':'Salaire — '+JOBS[S.job].n,E(c.sal))}${Rw('Loyers perçus',E(c.rents))}${Rw('Dividendes nets',E(c.div))}${Rw('Intérêts d’épargne',E(c.sav))}${Rw('Entreprise (estimé)',E(c.biz))}</div><div class="card"><h3>Dépenses mensuelles</h3>${Object.entries(S.exp).map(([k,v])=>Rw(k,E(v))).join('')}${Rw('Charges et taxe foncière des biens',E(c.ch))}${Rw('Mensualités de crédit',E(c.lp))}</div><div class="card">${Rw('Cash-flow mensuel',(c.net>=0?'+':'')+E(c.net),c.net<0?'r':'g')}</div><div class="card"><h3>Bilan</h3>${Rw('Trésorerie',E(S.cash))}${Rw('Immobilier',E(A))}${Rw('Bourse',E(holdVal()))}${Rw('Entreprise',E(S.biz*.85))}${Rw('Dettes',E(-D),'r')}${Rw('Patrimoine net',E(nw()),'g')}</div>`}
+else if(sb==1)h+=S.loans.length?S.loans.map(l=>`<div class="card"><b>${l.name}</b>${Rw('Capital restant',E(l.P))}${Rw('Taux',P(l.r))}${Rw('Mensualité',E(l.pay))}${Rw('Mois restants',l.n)}<button style="width:100%;margin-top:8px" onclick="payUI(${l.id})">Rembourser</button></div>`).join('')+`<div class="card mu">Rembourser une dette chère libère du cash-flow.</div>`:'<div class="card mu">Aucune dette. Les crédits immobiliers apparaîtront ici.</div>';
+else h+=`<div class="card">${S.log.slice(-60).reverse().map(x=>Rw('Mois '+x.m+' · '+x.d,x.a?E(x.a):'',x.a<0?'r':'g')).join('')||'<span class="mu">Aucune opération.</span>'}</div>`;return h},
+immo(){const sb=U.sub.immo||0;let h=seg('immo',['Marché','Mes biens']);
+if(!sb)return h+`<div class="card mu">Taux de crédit actuel : <b>${P(S.eco.rate+.012)}</b> sur 15 ans. Le levier amplifie gains et pertes.</div>`+S.mkt.map(lc).join('');
+if(!S.props.length)return h+'<div class="card mu">Vous ne possédez aucun bien. Consultez le marché.</div>';
+let v=0,r=0,cfm=0,y=0,pr=0;const cards=S.props.map(p=>{const ln=S.loans.find(x=>x.pid==p.id),c=p.rent-p.chg-p.tax/12-(ln?ln.pay:0),yy=(p.rent*12*(1-p.vp*2)-p.chg*12-p.tax);v+=p.val;r+=p.rent;cfm+=c;y+=yy;pr+=p.price+p.fees;
+return`<div class="card"><div class="row" style="border:0"><b>${p.name}</b>${p.vf?'<span class="tag">Vacant</span>':''}</div>${Rw('Valeur estimée',E(p.val))}${Rw('Plus-value latente',E(p.val-p.price),p.val<p.price?'r':'g')}${Rw('Loyer / charges',E(p.rent)+' / '+E(p.chg+p.tax/12))}${Rw('Crédit restant',E(ln?ln.P:0))}${Rw('Cash-flow du bien',E(c)+'/mois',c<0?'r':'g')}${Rw('Rendement net estimé',P(yy/(p.price+p.fees)))}<button style="width:100%;margin-top:8px" onclick="sellUI(${p.id})">Vendre</button></div>`}).join('');
+return h+`<div class="card"><h3>Portefeuille immobilier</h3>${Rw('Valeur totale',E(v))}${Rw('Loyers',E(r)+'/mois')}${Rw('Cash-flow net',E(cfm)+'/mois',cfm<0?'r':'g')}${Rw('Rendement net du portefeuille',P(y/pr))}</div>`+cards},
+bourse(){const sb=U.sub.bourse||0;let h=seg('bourse',['Marché','Portefeuille']);
+if(!sb)return h+[['a','Actions'],['e','ETF'],['o','Obligations']].map(([t,l])=>`<h3 class="mu" style="margin:14px 2px 8px">${l}</h3>`+S.stk.filter(s=>s.t==t).map(stc).join('')).join('');
+const hs=S.stk.filter(s=>S.hold[s.id]);if(!hs.length)return h+'<div class="card mu">Portefeuille vide. Achetez des titres depuis le marché.</div>';
+let tv=0,tc=0;const rows=hs.map(s=>{const o=S.hold[s.id],v=o.q*s.p;tv+=v;tc+=o.c;return`<div class="card"><b>${s.n}</b>${Rw('Quantité',o.q)}${Rw('Valeur',E(v))}${Rw('Plus-value latente',E(v-o.c)+' ('+P(v/o.c-1)+')',v<o.c?'r':'g')}<button style="width:100%;margin-top:8px" onclick="tradeUI('${s.id}','s')">Vendre</button></div>`}).join('');
+return h+`<div class="card"><h3>Portefeuille d’investissements</h3>${Rw('Valeur',E(tv))}${Rw('Plus-value latente',E(tv-tc),tv<tc?'r':'g')}${Rw('Dividendes nets estimés',E(cf().div)+'/mois')}</div>`+rows},
+plus(){const sb=U.sub.plus||0,e=S.eco;let h=seg('plus',['Économie','Carrière','Objectifs']);
+if(sb==0)return h+`<div class="grid">${K('Conjoncture',e.ph?'Récession':'Expansion',e.ph?'r':'g')}${K('Inflation',P(e.infl))}${K('Taux de crédit',P(e.rate+.012))}${K('Croissance (PIB)',P(e.gdp),e.gdp<0?'r':'')}</div><div class="card"><h3>Prix de l’immobilier (indice)</h3>${spark(e.ih)}</div><div class="card"><h3>Taux directeur</h3>${spark(e.rh,60,'#fbbf24')}</div><div class="card"><h3>Dernier événement</h3><div class="mu">${S.last&&S.last.ev||'Rien à signaler.'}</div></div>`;
+if(sb==1){const p=S.job<4?cl(.1+.2*(S.skill-2*S.job),0,.85):0;return h+`<div class="card"><h3>${JOBS[S.job].n}</h3>${Rw('Salaire net',E(S.sal)+'/mois')}${Rw('Compétences',S.skill+' / 12')}${Rw('Chances de promotion',S.job<4?P(p):'—')}<div style="display:flex;gap:8px;margin-top:8px"><button style="flex:1" onclick="train()">Formation (1 200 €)</button><button class="p" style="flex:1" onclick="promo()">Demander une promotion</button></div></div><div class="card"><h3>Mon entreprise</h3>${Rw('Capital investi',E(S.biz))}<div class="mu">Rendement moyen faible, très variable, avec un risque de perte.</div><div style="display:flex;gap:8px;margin-top:8px"><button class="p" style="flex:1" onclick="bizUI('in')">${S.biz?'Réinvestir':'Créer'}</button>${S.biz?'<button style="flex:1" onclick="bizUI(\'out\')">Retirer</button>':''}</div></div>`}
+return h+`<div class="card"><h3>Succès</h3>${AC.map(a=>Rw(a[1],S.ach[a[0]]!=null?'✓':'○',S.ach[a[0]]!=null?'g':'')).join('')}</div><div class="card"><button class="d" style="width:100%" onclick="resetUI()">Recommencer une partie</button><div class="mu" style="margin-top:8px">Simulation pédagogique : aucun argent réel, aucune connexion bancaire.</div></div>`}};
+const NAV=[['home','🏠','Accueil'],['budget','💶','Budget'],['immo','🏢','Immobilier'],['bourse','📈','Bourse'],['plus','👤','Profil']];
+function render(){$('#hd').innerHTML=`<div><b>Rentier</b><span class="mu">Année ${Math.floor(S.m/12)+1}</span></div><span class="pill">Mois ${S.m%12+1}/12</span>`;
+$('#main').innerHTML=V[U.tab]();$('#nav').innerHTML=NAV.map(n=>`<button class="${U.tab==n[0]?'on':''}" onclick="U.tab='${n[0]}';render();scrollTo(0,0)"><i>${n[1]}</i>${n[2]}</button>`).join('')}
+try{const j=localStorage.getItem(KEY);S=j?JSON.parse(j):null;if(!S||S.v!=1)fresh()}catch(e){fresh()}
+render();
+</script></body></html>
